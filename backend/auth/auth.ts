@@ -1,7 +1,7 @@
 import { Header, APIError, Gateway } from "encore.dev/api";
 import { authHandler } from "encore.dev/auth";
 import { secret } from "encore.dev/config";
-import * as jwt from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import db from "../db";
 
 const jwtSecret = secret("JWTSecret");
