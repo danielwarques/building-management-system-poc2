@@ -77,6 +77,7 @@ export const login = api<LoginRequest, LoginResponse>(
     }
 
     console.log("Login: creating token with secret length:", secretValue.length);
+    console.log("Login: secret preview:", secretValue.substring(0, 10) + "...");
     const payload = { userID: user.id.toString(), email: user.email, userType: user.user_type };
     console.log("Login: JWT payload:", payload);
     

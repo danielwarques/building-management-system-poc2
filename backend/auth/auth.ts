@@ -60,9 +60,11 @@ export const auth = authHandler<AuthParams, AuthData>(
 
       console.log("Auth handler: validating token with secret length:", secretValue.length);
       console.log("Auth handler: token preview:", token.substring(0, 50) + "...");
+      console.log("Auth handler: secret preview:", secretValue.substring(0, 10) + "...");
       
       const payload = jwt.verify(token, secretValue) as any;
-      console.log("Auth handler: JWT payload:", { userID: payload.userID, email: payload.email });
+      console.log("Auth handler: JWT verification successful");
+      console.log("Auth handler: JWT payload:", { userID: payload.userID, email: payload.email, userType: payload.userType });
       
       if (!payload.userID) {
         console.log("Auth handler: JWT payload missing userID");
@@ -118,7 +120,7 @@ export const auth = authHandler<AuthParams, AuthData>(
       if (err && typeof err === 'object' && 'name' in err) {
         if (err.name === 'JsonWebTokenError') {
           console.error("JWT Error type:", err.name, "Message:", 'message' in err ? err.message : 'unknown');
-          throw APIError.unauthenticated("invalid token format");
+          throw APIError.unauthenticated("invalid token format: " + ('message' in err ? err.message : 'unknown'));
         } else if (err.name === 'TokenExpiredError') {
           console.error("JWT Token expired");
           throw APIError.unauthenticated("token expired");
@@ -126,6 +128,10 @@ export const auth = authHandler<AuthParams, AuthData>(
           console.error("JWT Token not active yet");
           throw APIError.unauthenticated("token not active");
         }
+      }
+      if (err instanceof Error) {
+        console.error("Non-JWT error:", err.message);
+        throw APIError.unauthenticated("authentication failed: " + err.message);
       }
       throw APIError.unauthenticated("invalid token", err as Error);
     }
