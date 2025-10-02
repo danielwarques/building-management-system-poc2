@@ -25,10 +25,10 @@ export const create = api<CreateIssueRequest, CreateIssueResponse>(
   { expose: true, method: "POST", path: "/issues", auth: true },
   async (req) => {
     const auth = getAuthData()!;
-    // Verify asset belongs to building if provided
+
     if (req.assetId) {
       const asset = await db.queryRow`
-        SELECT 1 FROM assets 
+        SELECT 1 FROM assets
         WHERE id = ${req.assetId} AND building_id = ${req.buildingId}
       `;
       if (!asset) {
@@ -36,41 +36,49 @@ export const create = api<CreateIssueRequest, CreateIssueResponse>(
       }
     }
 
-    // Use the authenticated user as the reporter
     const reporterId = parseInt(auth.userID);
     if (isNaN(reporterId)) {
       throw APIError.invalidArgument("invalid user ID");
     }
 
-    const issue = await db.queryRow`
-      INSERT INTO issues (building_id, asset_id, title, description, priority, status, reported_by)
-      VALUES (${req.buildingId}, ${req.assetId}, ${req.title}, ${req.description}, ${req.priority}, 'open', ${reporterId})
-      RETURNING id, title, description, priority, status, created_at
-    `;
+    try {
+      await db.exec`BEGIN`;
 
-    if (!issue) {
-      throw APIError.internal("failed to create issue");
-    }
-
-    // Create notification for syndic
-    const building = await db.queryRow`
-      SELECT syndic_id FROM buildings WHERE id = ${req.buildingId}
-    `;
-
-    if (building?.syndic_id) {
-      await db.exec`
-        INSERT INTO notifications (user_id, user_type, title, message, type, reference_id)
-        VALUES (${building.syndic_id}, 'syndic', 'New Issue Reported', ${`New issue "${req.title}" reported in building`}, 'issue', ${issue.id})
+      const issue = await db.queryRow`
+        INSERT INTO issues (building_id, asset_id, title, description, priority, status, reported_by)
+        VALUES (${req.buildingId}, ${req.assetId}, ${req.title}, ${req.description}, ${req.priority}, 'open', ${reporterId})
+        RETURNING id, title, description, priority, status, created_at
       `;
-    }
 
-    return {
-      id: issue.id,
-      title: issue.title,
-      description: issue.description,
-      priority: issue.priority,
-      status: issue.status,
-      createdAt: issue.created_at,
-    };
+      if (!issue) {
+        await db.exec`ROLLBACK`;
+        throw APIError.internal("failed to create issue");
+      }
+
+      const building = await db.queryRow`
+        SELECT syndic_id FROM buildings WHERE id = ${req.buildingId}
+      `;
+
+      if (building?.syndic_id) {
+        await db.exec`
+          INSERT INTO notifications (user_id, user_type, title, message, type, reference_id)
+          VALUES (${building.syndic_id}, 'syndic', 'New Issue Reported', ${`New issue "${req.title}" reported in building`}, 'issue', ${issue.id})
+        `;
+      }
+
+      await db.exec`COMMIT`;
+
+      return {
+        id: issue.id,
+        title: issue.title,
+        description: issue.description,
+        priority: issue.priority,
+        status: issue.status,
+        createdAt: issue.created_at,
+      };
+    } catch (error) {
+      await db.exec`ROLLBACK`;
+      throw error;
+    }
   }
 );

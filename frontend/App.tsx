@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RoleProvider } from "./contexts/RoleContext";
 import { Toaster } from "@/components/ui/toaster";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import Dashboard from "./pages/Dashboard";
 import Buildings from "./pages/Buildings";
 import Users from "./pages/Users";
@@ -70,17 +71,19 @@ function ProtectedRoutes() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RoleProvider>
-          <Router>
-            <div className="min-h-screen bg-background">
-              <ProtectedRoutes />
-              <Toaster />
-            </div>
-          </Router>
-        </RoleProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RoleProvider>
+            <Router>
+              <div className="min-h-screen bg-background">
+                <ProtectedRoutes />
+                <Toaster />
+              </div>
+            </Router>
+          </RoleProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

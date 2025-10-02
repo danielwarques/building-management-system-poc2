@@ -6,6 +6,7 @@ interface ListIssuesParams {
   buildingId?: Query<number>;
   status?: Query<string>;
   limit?: Query<number>;
+  offset?: Query<number>;
 }
 
 interface Issue {
@@ -26,18 +27,21 @@ interface Issue {
 
 interface ListIssuesResponse {
   issues: Issue[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // Retrieves all issues.
 export const list = api<ListIssuesParams, ListIssuesResponse>(
   { expose: true, method: "GET", path: "/issues" },
   async (params) => {
-    const limit = params.limit || 50;
+    const limit = Math.min(params.limit || 50, 100);
+    const offset = params.offset || 0;
 
     let whereClause = "";
     let queryParams: any[] = [];
 
-    // Additional filters
     if (params.buildingId) {
       whereClause += ` AND i.building_id = $${queryParams.length + 1}`;
       queryParams.push(params.buildingId);
@@ -47,6 +51,15 @@ export const list = api<ListIssuesParams, ListIssuesResponse>(
       whereClause += ` AND i.status = $${queryParams.length + 1}`;
       queryParams.push(params.status);
     }
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM issues i
+      WHERE 1=1 ${whereClause}
+    `;
+
+    const countResult = await db.rawQueryRow(countQuery, ...queryParams);
+    const total = countResult?.total || 0;
 
     const query = `
       SELECT i.id, i.title, i.description, i.priority, i.status,
@@ -62,10 +75,10 @@ export const list = api<ListIssuesParams, ListIssuesResponse>(
       LEFT JOIN suppliers s ON i.assigned_to = s.id
       WHERE 1=1 ${whereClause}
       ORDER BY i.created_at DESC
-      LIMIT $${queryParams.length + 1}
+      LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
     `;
 
-    queryParams.push(limit);
+    queryParams.push(limit, offset);
 
     const rows = await db.rawQueryAll(query, ...queryParams);
 
@@ -85,6 +98,6 @@ export const list = api<ListIssuesParams, ListIssuesResponse>(
       updatedAt: row.updated_at,
     }));
 
-    return { issues };
+    return { issues, total, limit, offset };
   }
 );
