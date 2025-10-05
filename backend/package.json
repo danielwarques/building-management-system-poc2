@@ -8,10 +8,10 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
-    "encore.dev": "^1.50.0",
+    "encore.dev": "^1.50.4",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.8.3"
   }
 }

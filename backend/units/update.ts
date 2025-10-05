@@ -1,8 +1,6 @@
 import { api } from "encore.dev/api";
-import { APIError } from "encore.dev/api";
 import db from "../db";
 import { UpdateUnitRequest, Unit } from "./types";
-import { buildUpdateQuery } from "./update_helper";
 
 export interface UpdateUnitParams {
   id: number;
@@ -11,63 +9,94 @@ export interface UpdateUnitParams {
 export const update = api<UpdateUnitParams & UpdateUnitRequest, Unit>(
   { method: "PUT", path: "/units/:id", expose: true },
   async (req) => {
+    // Check if unit exists first
     const existingUnit = await db.queryRow`
       SELECT building_id FROM units WHERE id = ${req.id}
     `;
-
+    
     if (!existingUnit) {
-      throw APIError.notFound("unit not found");
+      throw new Error("Unit not found");
     }
 
+    // If updating unit number, check for conflicts
     if (req.unitNumber !== undefined) {
       const conflictUnit = await db.queryRow`
         SELECT id FROM units WHERE building_id = ${existingUnit.building_id} AND unit_number = ${req.unitNumber} AND id != ${req.id}
       `;
-
+      
       if (conflictUnit) {
-        throw APIError.alreadyExists(`unit number ${req.unitNumber} already exists in this building`);
+        throw new Error(`Unit number ${req.unitNumber} already exists in this building`);
       }
     }
 
-    const updateFields: Array<{ column: string; value: any }> = [];
+    // Build dynamic update query
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
+    let paramIndex = 1;
 
     if (req.unitNumber !== undefined) {
-      updateFields.push({ column: 'unit_number', value: req.unitNumber });
+      updateFields.push(`unit_number = $${paramIndex++}`);
+      updateValues.push(req.unitNumber);
     }
+
     if (req.floor !== undefined) {
-      updateFields.push({ column: 'floor', value: req.floor });
+      updateFields.push(`floor = $${paramIndex++}`);
+      updateValues.push(req.floor);
     }
+
     if (req.unitType !== undefined) {
-      updateFields.push({ column: 'unit_type', value: req.unitType });
+      updateFields.push(`unit_type = $${paramIndex++}`);
+      updateValues.push(req.unitType);
     }
+
     if (req.surfaceArea !== undefined) {
-      updateFields.push({ column: 'surface_area', value: req.surfaceArea });
+      updateFields.push(`surface_area = $${paramIndex++}`);
+      updateValues.push(req.surfaceArea);
     }
+
     if (req.millieme !== undefined) {
-      updateFields.push({ column: 'millieme', value: req.millieme });
+      updateFields.push(`millieme = $${paramIndex++}`);
+      updateValues.push(req.millieme);
     }
+
     if (req.description !== undefined) {
-      updateFields.push({ column: 'description', value: req.description });
+      updateFields.push(`description = $${paramIndex++}`);
+      updateValues.push(req.description);
     }
+
     if (req.balconyArea !== undefined) {
-      updateFields.push({ column: 'balcony_area', value: req.balconyArea });
+      updateFields.push(`balcony_area = $${paramIndex++}`);
+      updateValues.push(req.balconyArea);
     }
+
     if (req.garageIncluded !== undefined) {
-      updateFields.push({ column: 'garage_included', value: req.garageIncluded });
+      updateFields.push(`garage_included = $${paramIndex++}`);
+      updateValues.push(req.garageIncluded);
     }
+
     if (req.storageIncluded !== undefined) {
-      updateFields.push({ column: 'storage_included', value: req.storageIncluded });
+      updateFields.push(`storage_included = $${paramIndex++}`);
+      updateValues.push(req.storageIncluded);
     }
 
     if (updateFields.length === 0) {
-      throw APIError.invalidArgument("no fields to update");
+      throw new Error("No fields to update");
     }
 
-    const { query, values } = buildUpdateQuery('units', updateFields, 'id', req.id);
-    const unit = await db.rawQueryRow(query, ...values);
+    updateFields.push(`updated_at = NOW()`);
+    updateValues.push(req.id);
+
+    const query = `
+      UPDATE units 
+      SET ${updateFields.join(', ')} 
+      WHERE id = $${paramIndex} 
+      RETURNING *
+    `;
+
+    const unit = await db.rawQueryRow(query, ...updateValues);
 
     if (!unit) {
-      throw APIError.internal("failed to update unit");
+      throw new Error("Failed to update unit");
     }
 
     return {
