@@ -41,44 +41,34 @@ export const create = api<CreateIssueRequest, CreateIssueResponse>(
       throw APIError.invalidArgument("invalid user ID");
     }
 
-    try {
-      await db.exec`BEGIN`;
+    const issue = await db.queryRow`
+      INSERT INTO issues (building_id, asset_id, title, description, priority, status, reported_by)
+      VALUES (${req.buildingId}, ${req.assetId}, ${req.title}, ${req.description}, ${req.priority}, 'open', ${reporterId})
+      RETURNING id, title, description, priority, status, created_at
+    `;
 
-      const issue = await db.queryRow`
-        INSERT INTO issues (building_id, asset_id, title, description, priority, status, reported_by)
-        VALUES (${req.buildingId}, ${req.assetId}, ${req.title}, ${req.description}, ${req.priority}, 'open', ${reporterId})
-        RETURNING id, title, description, priority, status, created_at
-      `;
-
-      if (!issue) {
-        await db.exec`ROLLBACK`;
-        throw APIError.internal("failed to create issue");
-      }
-
-      const building = await db.queryRow`
-        SELECT syndic_id FROM buildings WHERE id = ${req.buildingId}
-      `;
-
-      if (building?.syndic_id) {
-        await db.exec`
-          INSERT INTO notifications (user_id, user_type, title, message, type, reference_id)
-          VALUES (${building.syndic_id}, 'syndic', 'New Issue Reported', ${`New issue "${req.title}" reported in building`}, 'issue', ${issue.id})
-        `;
-      }
-
-      await db.exec`COMMIT`;
-
-      return {
-        id: issue.id,
-        title: issue.title,
-        description: issue.description,
-        priority: issue.priority,
-        status: issue.status,
-        createdAt: issue.created_at,
-      };
-    } catch (error) {
-      await db.exec`ROLLBACK`;
-      throw error;
+    if (!issue) {
+      throw APIError.internal("failed to create issue");
     }
+
+    const building = await db.queryRow`
+      SELECT syndic_id FROM buildings WHERE id = ${req.buildingId}
+    `;
+
+    if (building?.syndic_id) {
+      await db.exec`
+        INSERT INTO notifications (user_id, user_type, title, message, type, reference_id)
+        VALUES (${building.syndic_id}, 'syndic', 'New Issue Reported', ${`New issue "${req.title}" reported in building`}, 'issue', ${issue.id})
+      `;
+    }
+
+    return {
+      id: issue.id,
+      title: issue.title,
+      description: issue.description,
+      priority: issue.priority,
+      status: issue.status,
+      createdAt: issue.created_at,
+    };
   }
 );

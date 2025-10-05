@@ -1,4 +1,4 @@
-interface UpdateField {
+export interface UpdateField {
   column: string;
   value: any;
 }
